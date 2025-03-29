@@ -1,0 +1,9 @@
+pandas
+numpy
+pymc>=5
+arviz
+scipy
+tqdm
+sklearn
+torch
+transformers
