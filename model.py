@@ -1,0 +1,137 @@
+import cloudpickle
+import itertools
+import pandas as pd
+import numpy as np
+import pymc as pm
+import arviz as az
+import scipy.stats as stats
+from tqdm import tqdm
+from sklearn.preprocessing import StandardScaler
+from sklearn.decomposition import PCA
+
+# Loading pairwise datasets
+df_train_set = pd.read_csv('data/train_judgments_clean.csv')
+df_dev_set = pd.read_csv('data/dev_judgments_clean.csv')
+
+## Case 1: Use concantenated embeddings as features  (uncomment when used) ##
+# dataframes = [df_train_set, df_dev_set]
+# file_names = ['subtask2_train_embeddings.npz', 'subtask2_dev_embeddings.npz']
+# embeddings_lists = [[], []]
+
+# # retrieve the context embeddings using the identifiers from the dataframe
+# for df, file_name, embeddings in zip(dataframes, file_names, embeddings_lists ):
+#     loaded_embeddings = np.load(file_name)
+#     for _, row in tqdm(df.iterrows()):
+#         try:
+#             context_embedding1 = loaded_embeddings[row['identifier1']]
+#             context_embedding2 = loaded_embeddings[row['identifier2']]
+#             # concatenate the embeddings to form a single feature vector
+#             concatenated_emb = np.concatenate((context_embedding1, context_embedding2))
+#             embeddings.append(concatenated_emb)
+#         except KeyError as e:
+#             print(f"KeyError: {e}. Identifier not found in embeddings file.")
+#             continue
+
+# # convert the lists of feature vectors to numpy arrays (feature matrices)
+# train_embeddings = np.array(embeddings_lists[0])
+# dev_embeddings = np.array(embeddings_lists[1])
+# Downrank the embeddings with PCA
+# pca = PCA(n_components=8)
+
+# train_embeddings = StandardScaler().fit_transform(train_embeddings)
+# train_pca = pca.fit_transform(train_embeddings) 
+
+## Case 2: Use cosine similarity as features ##
+# from sklearn.metrics.pairwise import cosine_similarity
+
+# dataframes = [df_dev_set, df_train_set]
+# file_names = ['data/dev_embeddings.npz', 'data/train_embeddings.npz']
+
+# print(len(df_train_set), len(df_dev_set))
+# cosine_similarities_lists = [[], []]
+
+# # iterate over the lists to compute and store cosine similarities
+# for df, file_name, cosine_similarities in zip(dataframes, file_names, cosine_similarities_lists):
+#     loaded_embeddings = np.load(file_name)
+#     for _, row in tqdm(df.iterrows()):
+#         try:
+#             context_embedding1 = loaded_embeddings[row['identifier1']] 
+#             context_embedding2 = loaded_embeddings[row['identifier2']]
+#             cosine_sim = cosine_similarity([context_embedding1], [context_embedding2])[0][0]
+#             cosine_similarities.append(cosine_sim)
+#         except KeyError as e:
+#             # print(f"KeyError: {e}. row not there")
+#             cosine_similarities.append(np.nan)
+#             continue
+#     # add the cosine similarities to the dataFrame
+#     df['cosine_similarity'] = cosine_similarities
+
+# # save new features to files
+# df_train_set = df_train_set[~df_train_set['cosine_similarity'].isnull()]
+# df_dev_set = df_dev_set[~df_dev_set['cosine_similarity'].isnull()]
+# df_train_set['median_judgment'] = df_train_set['median_judgment'].astype(float)
+# df_train_set['mean_disagreement'] = df_train_set['mean_disagreement'].astype(float)
+# print(len(df_train_set), len(df_dev_set))
+# df_train_set.to_csv('data/train_judgments_clean.csv', index=False)
+# df_dev_set.to_csv('data/dev_judgments_clean.csv', index=False)
+
+# define linear model and fit the posterior
+# xbar = df_train_set['cosine_similarity'].mean()
+# with pm.Model() as WiC:
+#     # priors
+#     a = pm.Normal("a", mu=0, sigma=4)
+#     b = pm.Lognormal("b", mu=0, sigma=1)
+#     sigma = pm.Uniform("sigma", 0, 1)
+    
+#     # observed data
+#     mu = a + b * (df_train_set['cosine_similarity'] - xbar)
+#     proximity = pm.Normal("proximity", mu=mu, sigma=sigma, observed=df_train_set['median_judgment'])
+
+#     # fitting
+#     trace_wic = pm.sample(100, tune=10, cores=1, chains=4)
+
+# # save the model
+pickle_filepath = f'pickle.pkl'
+# dict_to_save = {'model': WiC,
+#                 'trace': trace_wic,
+#                 }
+
+# with open(pickle_filepath , 'wb') as buff:
+#     cloudpickle.dump(dict_to_save, buff)
+
+with open(pickle_filepath , 'rb') as buff:
+    model_dict = cloudpickle.load(buff)
+
+trace_wic = model_dict['trace']
+WiC = model_dict['model']
+
+def mean_abs_disagreement_func(x):
+    return np.nan_to_num(np.nanmean([abs(pair[1] - pair[0]) for pair in itertools.combinations(list(x),2)]), nan=0.0)
+
+# in-sample predictions to test on training data
+# with WiC:
+#     judgments_pred = pm.sample_posterior_predictive(trace_wic)
+#     judgments_pred = az.extract(judgments_pred, num_samples=10, group='posterior_predictive')
+#     print(judgments_pred)
+#     mean_abs_disagreement = judgments_pred.reduce(func=(lambda data, axis: np.apply_along_axis(mean_abs_disagreement_func, axis, data)), dim='sample')
+#     print(mean_abs_disagreement)
+#     res = stats.spearmanr(mean_abs_disagreement.to_pandas()['proximity'], df_train_set['mean_disagreement'])
+#     print('train set rho score: ', res.statistic)
+
+# sample and evaluate on the dev set
+xbar = df_dev_set['cosine_similarity'].mean()
+with pm.Model() as WiC_predict:
+    # priors
+    a = pm.Normal("a", mu=0, sigma=4)
+    b = pm.Lognormal("b", mu=0, sigma=1)
+    sigma = pm.Uniform("sigma", 0, 1)
+
+    mu = a + b * (df_dev_set['cosine_similarity'] - xbar)
+    proximity = pm.Normal("proximity", mu=mu, sigma=sigma)
+
+    # out-of-sample predictions
+    predictions = pm.sample_posterior_predictive(trace_wic, predictions=True, var_names=['proximity'])
+    predictions = az.extract(predictions, num_samples=10, group='predictions')
+    mean_abs_disagreement = predictions.reduce(func=(lambda data, axis: np.apply_along_axis(mean_abs_disagreement_func, axis, data)), dim='sample')
+    res = stats.spearmanr(mean_abs_disagreement.to_pandas()['proximity'], df_dev_set['mean_disagreement'])
+    print('dev set rho score: ', res.statistic)
