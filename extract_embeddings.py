@@ -185,7 +185,7 @@ def get_target_token_embedding(context, index, truncation_tokens_before_target=0
     return target_embeddings_nump
 
 
-# getting target token embeddings for contexts in train and dev
+# getting target token embeddings for contexts in train and dev 
 dataframes = [df_train_uses_merged, df_dev_uses_merged]
 file_names = ['train_embeddings.npz', 'dev_embeddings.npz']
 

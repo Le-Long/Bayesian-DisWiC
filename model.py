@@ -6,6 +6,7 @@ import pymc as pm
 import arviz as az
 import scipy.stats as stats
 from tqdm import tqdm
+from ast import literal_eval
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 
@@ -15,7 +16,7 @@ df_dev_set = pd.read_csv('data/dev_judgments_clean.csv')
 
 ## Case 1: Use concantenated embeddings as features  (uncomment when used) ##
 # dataframes = [df_train_set, df_dev_set]
-# file_names = ['subtask2_train_embeddings.npz', 'subtask2_dev_embeddings.npz']
+# file_names = ['data/train_embeddings.npz', 'data/dev_embeddings.npz']
 # embeddings_lists = [[], []]
 
 # # retrieve the context embeddings using the identifiers from the dataframe
@@ -35,11 +36,14 @@ df_dev_set = pd.read_csv('data/dev_judgments_clean.csv')
 # # convert the lists of feature vectors to numpy arrays (feature matrices)
 # train_embeddings = np.array(embeddings_lists[0])
 # dev_embeddings = np.array(embeddings_lists[1])
-# Downrank the embeddings with PCA
-# pca = PCA(n_components=8)
+# # Downrank the embeddings with PCA
+n_pca = 8
+# pca = PCA(n_components=n_pca)
 
 # train_embeddings = StandardScaler().fit_transform(train_embeddings)
-# train_pca = pca.fit_transform(train_embeddings) 
+# df_train_set['concate_pca'] = pca.fit_transform(train_embeddings).tolist() 
+# dev_embeddings = StandardScaler().fit_transform(dev_embeddings)
+# df_dev_set['concate_pca'] = pca.fit_transform(dev_embeddings).tolist()
 
 ## Case 2: Use cosine similarity as features ##
 # from sklearn.metrics.pairwise import cosine_similarity
@@ -67,8 +71,8 @@ df_dev_set = pd.read_csv('data/dev_judgments_clean.csv')
 #     df['cosine_similarity'] = cosine_similarities
 
 # # save new features to files
-# df_train_set = df_train_set[~df_train_set['cosine_similarity'].isnull()]
-# df_dev_set = df_dev_set[~df_dev_set['cosine_similarity'].isnull()]
+# df_train_set = df_train_set[~df_train_set['concate_pca'].isnull()]
+# df_dev_set = df_dev_set[~df_dev_set['concate_pca'].isnull()]
 # df_train_set['median_judgment'] = df_train_set['median_judgment'].astype(float)
 # df_train_set['mean_disagreement'] = df_train_set['mean_disagreement'].astype(float)
 # print(len(df_train_set), len(df_dev_set))
@@ -76,57 +80,67 @@ df_dev_set = pd.read_csv('data/dev_judgments_clean.csv')
 # df_dev_set.to_csv('data/dev_judgments_clean.csv', index=False)
 
 # define linear model and fit the posterior
-# xbar = df_train_set['cosine_similarity'].mean()
-# with pm.Model() as WiC:
-#     # priors
-#     a = pm.Normal("a", mu=0, sigma=4)
-#     b = pm.Lognormal("b", mu=0, sigma=1)
-#     sigma = pm.Uniform("sigma", 0, 1)
+df_train_set['concate_pca'] = df_train_set['concate_pca'].apply(literal_eval)
+df_dev_set['concate_pca'] = df_dev_set['concate_pca'].apply(literal_eval)
+
+array = np.array(df_train_set['concate_pca'].tolist())
+xbar = np.mean(array, axis=0)
+with pm.Model(coords={'features':[i for i in range(n_pca)]}) as WiC:
+    # priors
+    a = pm.Normal("a", mu=1, sigma=3)
+    b = pm.Normal("b", mu=0, sigma=1, dims="features")
+    sigma = pm.Uniform("sigma", 0, 1)
     
-#     # observed data
-#     mu = a + b * (df_train_set['cosine_similarity'] - xbar)
-#     proximity = pm.Normal("proximity", mu=mu, sigma=sigma, observed=df_train_set['median_judgment'])
+    # observed data
+    xdata = pm.Data('xdata', array - xbar, mutable=True)
+    mu = a + xdata.dot(b)
+    print(mu.shape.eval())
+    proximity = pm.Normal("proximity", mu=mu, sigma=sigma, observed=df_train_set['median_judgment'])
 
-#     # fitting
-#     trace_wic = pm.sample(100, tune=10, cores=1, chains=4)
+    # fitting
+    trace_wic = pm.sample(200, tune=10, cores=1, chains=4)
 
-# # save the model
-pickle_filepath = f'pickle.pkl'
-# dict_to_save = {'model': WiC,
-#                 'trace': trace_wic,
-#                 }
+# # # save the model
+pickle_filepath = f'pickle_concate.pkl'
+dict_to_save = {'model': WiC,
+                'trace': trace_wic,
+                }
 
-# with open(pickle_filepath , 'wb') as buff:
-#     cloudpickle.dump(dict_to_save, buff)
+with open(pickle_filepath , 'wb') as buff:
+    cloudpickle.dump(dict_to_save, buff)
 
-with open(pickle_filepath , 'rb') as buff:
-    model_dict = cloudpickle.load(buff)
+# with open(pickle_filepath , 'rb') as buff:
+#     model_dict = cloudpickle.load(buff)
 
-trace_wic = model_dict['trace']
-WiC = model_dict['model']
+# trace_wic = model_dict['trace']
+# WiC = model_dict['model']
 
 def mean_abs_disagreement_func(x):
     return np.nan_to_num(np.nanmean([abs(pair[1] - pair[0]) for pair in itertools.combinations(list(x),2)]), nan=0.0)
 
-# in-sample predictions to test on training data
-# with WiC:
-#     judgments_pred = pm.sample_posterior_predictive(trace_wic)
-#     judgments_pred = az.extract(judgments_pred, num_samples=10, group='posterior_predictive')
-#     print(judgments_pred)
-#     mean_abs_disagreement = judgments_pred.reduce(func=(lambda data, axis: np.apply_along_axis(mean_abs_disagreement_func, axis, data)), dim='sample')
-#     print(mean_abs_disagreement)
-#     res = stats.spearmanr(mean_abs_disagreement.to_pandas()['proximity'], df_train_set['mean_disagreement'])
-#     print('train set rho score: ', res.statistic)
+# # in-sample predictions to test on training data
+with WiC:
+    judgments_pred = pm.sample_posterior_predictive(trace_wic)
+    judgments_pred = az.extract(judgments_pred, num_samples=10, group='posterior_predictive')
+    print(judgments_pred)
+    mean_abs_disagreement = judgments_pred.reduce(func=(lambda data, axis: np.apply_along_axis(mean_abs_disagreement_func, axis, data)), dim='sample')
+    print(mean_abs_disagreement)
+    res = stats.spearmanr(mean_abs_disagreement.to_pandas()['proximity'], df_train_set['mean_disagreement'])
+    print('train set rho score: ', res.statistic)
 
 # sample and evaluate on the dev set
-xbar = df_dev_set['cosine_similarity'].mean()
-with pm.Model() as WiC_predict:
+array = np.array(df_dev_set['concate_pca'].tolist())
+xbar = np.mean(array, axis=0)
+with pm.Model(coords={'features':[i for i in range(n_pca)]}) as WiC_predict:
     # priors
-    a = pm.Normal("a", mu=0, sigma=4)
-    b = pm.Lognormal("b", mu=0, sigma=1)
+    a = pm.Normal("a", mu=1, sigma=3)
+    b = pm.Normal("b", mu=0, sigma=1, dims="features")
     sigma = pm.Uniform("sigma", 0, 1)
-
-    mu = a + b * (df_dev_set['cosine_similarity'] - xbar)
+    
+    # observed data
+    xdata = pm.Data('xdata', array - xbar, mutable=True)
+    mu = a + xdata.dot(b)
+    print(mu.shape.eval())
     proximity = pm.Normal("proximity", mu=mu, sigma=sigma)
 
     # out-of-sample predictions
