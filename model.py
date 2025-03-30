@@ -28,6 +28,7 @@ def concat(dataframes, file_names)
                 embeddings.append(concatenated_emb)
             except KeyError as e:
                 print(f"KeyError: {e}. Identifier not found in embeddings file.")
+                embeddings.append(np.nan)
                 continue
 
     # convert the lists of feature vectors to numpy arrays (feature matrices)
@@ -138,9 +139,7 @@ def main(features, val=True):
     with WiC:
         judgments_pred = pm.sample_posterior_predictive(trace_wic)
         judgments_pred = az.extract(judgments_pred, num_samples=10, group='posterior_predictive')
-        print(judgments_pred)
         mean_abs_disagreement = judgments_pred.reduce(func=(lambda data, axis: np.apply_along_axis(mean_abs_disagreement_func, axis, data)), dim='sample')
-        print(mean_abs_disagreement)
         res = stats.spearmanr(mean_abs_disagreement.to_pandas()['proximity'], df_train_set['mean_disagreement'])
         print('train set rho score: ', res.statistic)
 

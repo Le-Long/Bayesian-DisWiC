@@ -73,7 +73,6 @@ def merge_dataset(data_set, id2context, id2idx):
 
 df_train_uses_merged = pd.DataFrame(merge_dataset(train_set, train_id2context, train_id2idx))
 df_dev_uses_merged = pd.DataFrame(merge_dataset(dev_set, dev_id2context, dev_id2idx))
-print(df_train_uses_merged.shape, df_dev_uses_merged.shape)
 
 # define and load the tokenizer and model for XL-lexeme and XLM-RoBERTa
 # uncomment when use XL-lexeme
@@ -187,7 +186,7 @@ def get_target_token_embedding(context, index, truncation_tokens_before_target=0
 
 # getting target token embeddings for contexts in train and dev 
 dataframes = [df_train_uses_merged, df_dev_uses_merged]
-file_names = ['train_embeddings.npz', 'dev_embeddings.npz']
+file_names = ['data/train_embeddings.npz', 'data/dev_embeddings.npz']
 
 for df, file_name in zip(dataframes, file_names):
     id2embedding = {}
