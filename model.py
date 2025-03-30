@@ -73,6 +73,9 @@ def cosine(dataframes, file_names)
                 continue
         # add the cosine similarities to the dataFrame
         df['cosine_similarity'] = cosine_similarities
+
+    df_train_set = df_train_set[~df_train_set['cosine_similarity'].isnull()]
+    df_dev_set = df_dev_set[~df_dev_set['cosine_similarity'].isnull()]
     return df_train_set, df_dev_set
 
 
