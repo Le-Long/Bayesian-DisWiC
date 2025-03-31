@@ -8,7 +8,7 @@ After clone this directory to your machine, you can install pymc and other libra
 
 ```bash
 cd Bayesian-DisWiC/
-python -m pip install requirements.txt
+python -m pip install -r requirements.txt
 ```
 
 ### Data
