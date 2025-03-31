@@ -4,6 +4,6 @@ pymc>=5
 arviz
 scipy
 tqdm
-sklearn
 torch
 transformers
+scikit-learn
