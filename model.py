@@ -13,7 +13,7 @@ from sklearn.decomposition import PCA
 
 
 # Case 1: Use concantenated embeddings as features  ##
-def concat(dataframes, file_names)
+def concat(dataframes, file_names):
     embeddings_lists = [[], []]
 
     # retrieve the context embeddings using the identifiers from the dataframe
@@ -49,7 +49,7 @@ def concat(dataframes, file_names)
 
 
 # Case 2: Use cosine similarity as features ##
-def cosine(dataframes, file_names)
+def cosine(dataframes, file_names):
     from sklearn.metrics.pairwise import cosine_similarity
 
     dataframes = [df_dev_set, df_train_set]
@@ -108,11 +108,14 @@ def main(features, val=True):
 
     # define linear model and fit the posterior
     array = np.array(df_train_set['concate_pca'].tolist()) if features else df_train_set['cosine_similarity']
+    dims='features' if features else None
+    coords = {'features': [i for i in range(n_pca)]} if features else None
+    
     xbar = np.mean(array, axis=0)
-    with pm.Model(coords={'features':[i for i in range(n_pca)]}) as WiC:
+    with pm.Model(coords=coords) as WiC:
         # priors
-        a = pm.Normal("a", mu=1, sigma=3)
-        b = pm.Normal("b", mu=0, sigma=1, dims="features")
+        a = pm.LogNormal("a", mu=2, sigma=1)
+        b = pm.Normal("b", mu=1, sigma=1, dims=dims) 
         sigma = pm.Uniform("sigma", 0, 1)
         
         # observed data
@@ -124,7 +127,7 @@ def main(features, val=True):
         trace_wic = pm.sample(200, tune=10, cores=1, chains=4)
 
     # # # save the model
-    pickle_filepath = f'pickle_concate.pkl'
+    pickle_filepath = f'pickle.pkl'
     dict_to_save = {'model': WiC,
                     'trace': trace_wic,
                     }
@@ -148,17 +151,19 @@ def main(features, val=True):
 
     if val:
         # sample and evaluate on the dev set
-        array = np.array(df_dev_set['concate_pca'].tolist())
+        array = np.array(df_dev_set['concate_pca'].tolist()) if features else df_dev_set['cosine_similarity']
+        dims="features" if features else None
+        
         xbar = np.mean(array, axis=0)
-        with pm.Model(coords={'features':[i for i in range(n_pca)]}) as WiC_predict:
+        with pm.Model(coords=coords) as WiC:
             # priors
-            a = pm.Normal("a", mu=1, sigma=3)
-            b = pm.Normal("b", mu=0, sigma=1, dims="features")
+            a = pm.LogNormal("a", mu=2, sigma=1)
+            b = pm.Normal("b", mu=1, sigma=1, dims=dims)
             sigma = pm.Uniform("sigma", 0, 1)
             
             # observed data
             xdata = pm.Data('xdata', array - xbar, mutable=True)
-            mu = a + xdata.dot(b)
+            mu = a + xdata.dot(b) if features else a + b * xdata
             proximity = pm.Normal("proximity", mu=mu, sigma=sigma)
 
             # out-of-sample predictions
