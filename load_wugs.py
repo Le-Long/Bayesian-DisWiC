@@ -130,7 +130,7 @@ assert df_judgments_length_before_sorting == len(df_judgments)
 ## Clean and aggregate data ##
 # Replace 0.0 judgments with nan
 df = df_judgments.copy()
-df['judgment'] = df['judgment'].replace(0.0, np.NaN)
+df['judgment'] = df['judgment'].replace(0.0, np.nan)
 
 # Aggregate use pairs and extract median column
 df = df.groupby(['identifier1', 'identifier2', 'lemma', 'dataset', 'language'])['judgment'].apply(list).reset_index(name='judgments')

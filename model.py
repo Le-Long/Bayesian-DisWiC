@@ -159,7 +159,6 @@ def main(features, val=True):
             # observed data
             xdata = pm.Data('xdata', array - xbar, mutable=True)
             mu = a + xdata.dot(b)
-            print(mu.shape.eval())
             proximity = pm.Normal("proximity", mu=mu, sigma=sigma)
 
             # out-of-sample predictions
