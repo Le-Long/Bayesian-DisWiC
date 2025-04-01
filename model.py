@@ -32,18 +32,21 @@ def concat(dataframes, file_names):
                 continue
 
     # convert the lists of feature vectors to numpy arrays (feature matrices)
-    train_embeddings = np.array(embeddings_lists[0])
-    dev_embeddings = np.array(embeddings_lists[1])
+    dataframes[0]['concate_pca'] = pd.Series(embeddings_lists[0])
+    dataframes[1]['concate_pca'] = pd.Series(embeddings_lists[1])
+    dataframes[0] = dataframes[0][~dataframes[0]['concate_pca'].isnull()]
+    dataframes[1] = dataframes[1][~dataframes[1]['concate_pca'].isnull()]
+    train_embeddings = np.array(dataframes[0]['concate_pca'].tolist())
+    dev_embeddings = np.array(dataframes[1]['concate_pca'].tolist())
+
     # Downrank the embeddings with PCA
-    pca = PCA(n_components=n_pca)
+    print(dev_embeddings, dev_embeddings.shape)
+    pca = PCA(n_components=8)
 
     train_embeddings = StandardScaler().fit_transform(train_embeddings)
     dataframes[0]['concate_pca'] = pca.fit_transform(train_embeddings).tolist() 
     dev_embeddings = StandardScaler().fit_transform(dev_embeddings)
     dataframes[1]['concate_pca'] = pca.fit_transform(dev_embeddings).tolist()
-
-    dataframes[0] = dataframes[0][~dataframes[0]['concate_pca'].isnull()]
-    dataframes[1] = dataframes[1][~dataframes[1]['concate_pca'].isnull()]
 
     return dataframes
 
