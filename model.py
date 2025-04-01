@@ -40,7 +40,6 @@ def concat(dataframes, file_names):
     dev_embeddings = np.array(dataframes[1]['concate_pca'].tolist())
 
     # Downrank the embeddings with PCA
-    print(dev_embeddings, dev_embeddings.shape)
     pca = PCA(n_components=8)
 
     train_embeddings = StandardScaler().fit_transform(train_embeddings)
