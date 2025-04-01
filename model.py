@@ -27,7 +27,7 @@ def concat(dataframes, file_names):
                 concatenated_emb = np.concatenate((context_embedding1, context_embedding2))
                 embeddings.append(concatenated_emb)
             except KeyError as e:
-                print(f"KeyError: {e}. Identifier not found in embeddings file.")
+                # print(f"KeyError: {e}. Identifier not found in embeddings file.")
                 embeddings.append(np.nan)
                 continue
 
@@ -38,24 +38,19 @@ def concat(dataframes, file_names):
     pca = PCA(n_components=n_pca)
 
     train_embeddings = StandardScaler().fit_transform(train_embeddings)
-    df_train_set['concate_pca'] = pca.fit_transform(train_embeddings).tolist() 
+    dataframes[0]['concate_pca'] = pca.fit_transform(train_embeddings).tolist() 
     dev_embeddings = StandardScaler().fit_transform(dev_embeddings)
-    df_dev_set['concate_pca'] = pca.fit_transform(dev_embeddings).tolist()
+    dataframes[1]['concate_pca'] = pca.fit_transform(dev_embeddings).tolist()
 
-    df_train_set = df_train_set[~df_train_set['concate_pca'].isnull()]
-    df_dev_set = df_dev_set[~df_dev_set['concate_pca'].isnull()]
+    dataframes[0] = dataframes[0][~dataframes[0]['concate_pca'].isnull()]
+    dataframes[1] = dataframes[1][~dataframes[1]['concate_pca'].isnull()]
 
-    return df_train_set, df_dev_set
+    return dataframes
 
 
 # Case 2: Use cosine similarity as features ##
 def cosine(dataframes, file_names):
     from sklearn.metrics.pairwise import cosine_similarity
-
-    dataframes = [df_dev_set, df_train_set]
-    file_names = ['data/dev_embeddings.npz', 'data/train_embeddings.npz']
-
-    print(len(df_train_set), len(df_dev_set))
     cosine_similarities_lists = [[], []]
 
     # iterate over the lists to compute and store cosine similarities
@@ -74,9 +69,9 @@ def cosine(dataframes, file_names):
         # add the cosine similarities to the dataFrame
         df['cosine_similarity'] = cosine_similarities
 
-    df_train_set = df_train_set[~df_train_set['cosine_similarity'].isnull()]
-    df_dev_set = df_dev_set[~df_dev_set['cosine_similarity'].isnull()]
-    return df_train_set, df_dev_set
+    dataframes[0] = dataframes[0][~dataframes[0]['cosine_similarity'].isnull()]
+    dataframes[1] = dataframes[1][~dataframes[1]['cosine_similarity'].isnull()]
+    return dataframes
 
 
 def mean_abs_disagreement_func(x):
